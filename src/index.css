@@ -1,0 +1,102 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Inter', system-ui, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: #0e1a2a;
+  background: #f5f7fa;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+/* Tabular nums for metrics */
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Gradient helpers */
+.gradient-navy {
+  background: linear-gradient(135deg, #1e3a5f 0%, #2f5e8f 100%);
+}
+
+.gradient-orange {
+  background: linear-gradient(135deg, #ff5a1c 0%, #ff7a45 100%);
+}
+
+.gradient-success {
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+}
+
+.gradient-danger {
+  background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+}
+
+.gradient-card-1 {
+  background: linear-gradient(135deg, #1e3a5f 0%, #507eac 100%);
+}
+
+.gradient-card-2 {
+  background: linear-gradient(135deg, #c72e08 0%, #ff7a45 100%);
+}
+
+.gradient-card-3 {
+  background: linear-gradient(135deg, #059669 0%, #34d399 100%);
+}
+
+.gradient-card-4 {
+  background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+}
+
+/* Animation delay utilities */
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+.delay-500 { animation-delay: 500ms; }
+
+/* Funnel step gradients */
+.funnel-step-0 { fill: url(#funnelGrad0); }
+.funnel-step-1 { fill: url(#funnelGrad1); }
+.funnel-step-2 { fill: url(#funnelGrad2); }
+.funnel-step-3 { fill: url(#funnelGrad3); }
+.funnel-step-4 { fill: url(#funnelGrad4); }
+.funnel-step-5 { fill: url(#funnelGrad5); }
+.funnel-step-6 { fill: url(#funnelGrad6); }
+.funnel-step-7 { fill: url(#funnelGrad7); }
