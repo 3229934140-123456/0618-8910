@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import type { AlertRule, AlertHistoryItem, AlertContact } from '@/types';
-import { INITIAL_ALERT_RULES, INITIAL_ALERT_HISTORY } from '@/services/mockData';
+import { INITIAL_ALERT_RULES, INITIAL_ALERT_HISTORY, simulateAlertCheck } from '@/services/mockData';
 import { generateId } from '@/utils/helpers';
+import { loadState, saveState } from '@/services/localStorage';
 
 interface AlertStore {
   rules: AlertRule[];
@@ -18,11 +19,12 @@ interface AlertStore {
   markAllRead: () => void;
   getUnreadCount: () => number;
   getCriticalCount: () => number;
+  simulateCheck: (getConversionRate: (funnelId: string, stepId: string) => { current: number; previous: number }) => number;
 }
 
 export const useAlertStore = create<AlertStore>((set, get) => ({
-  rules: INITIAL_ALERT_RULES,
-  history: INITIAL_ALERT_HISTORY,
+  rules: loadState<AlertRule[]>('alert_rules', INITIAL_ALERT_RULES),
+  history: loadState<AlertHistoryItem[]>('alert_history', INITIAL_ALERT_HISTORY),
 
   addRule: (data) => {
     const now = new Date().toISOString();
@@ -62,4 +64,30 @@ export const useAlertStore = create<AlertStore>((set, get) => ({
   getUnreadCount: () => get().history.filter((h) => !h.isRead).length,
   getCriticalCount: () =>
     get().history.filter((h) => !h.isRead && h.severity === 'critical').length,
+
+  simulateCheck: (getConversionRate) => {
+    const { rules } = get();
+    const enabledRules = rules.filter(r => r.isEnabled);
+    let newAlertCount = 0;
+
+    for (const rule of enabledRules) {
+      const rates = getConversionRate(rule.funnelId, rule.stepId);
+      const alertItem = simulateAlertCheck(rule, rates.current, rates.previous);
+      if (alertItem) {
+        set({
+          history: [alertItem, ...get().history],
+          rules: get().rules.map(r =>
+            r.id === rule.id ? { ...r, lastTriggeredAt: alertItem.triggeredAt } : r
+          ),
+        });
+        newAlertCount++;
+      }
+    }
+    return newAlertCount;
+  },
 }));
+
+useAlertStore.subscribe((state) => {
+  saveState('alert_rules', state.rules);
+  saveState('alert_history', state.history);
+});

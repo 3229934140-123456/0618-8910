@@ -49,6 +49,8 @@ const FunnelAnalysisPage: React.FC = () => {
     setSelectedDimension,
     compareMode,
     setCompareMode,
+    customComparePeriod,
+    setCustomComparePeriod,
     toggleFavorite,
     deleteFunnel,
   } = useFunnelStore();
@@ -60,15 +62,15 @@ const FunnelAnalysisPage: React.FC = () => {
   const funnel = useMemo(() => (id ? getFunnel(id) : undefined), [id, getFunnel]);
   const result = useMemo(
     () => (id ? getFunnelResult(id) : { funnelId: id || '', period: { start: '', end: '' }, steps: [], totalConversionRate: 0 }),
-    [id, getFunnelResult]
+    [id, getFunnelResult, datePreset, customDateRange]
   );
   const dimensionSplit = useMemo(
     () => (id ? getDimensionSplit(id) : null),
-    [id, getDimensionSplit, selectedDimension]
+    [id, getDimensionSplit, selectedDimension, datePreset, customDateRange]
   );
   const periodCompare = useMemo(
     () => (id ? getPeriodCompare(id) : null),
-    [id, getPeriodCompare, compareMode]
+    [id, getPeriodCompare, compareMode, datePreset, customDateRange, customComparePeriod]
   );
 
   const churnedUsers = useMemo(() => {
@@ -274,6 +276,8 @@ const FunnelAnalysisPage: React.FC = () => {
           data={periodCompare}
           compareMode={compareMode}
           onModeChange={setCompareMode}
+          customComparePeriod={customComparePeriod}
+          onCustomComparePeriodChange={setCustomComparePeriod}
         />
       )}
 

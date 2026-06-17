@@ -2,9 +2,12 @@ import React, { useState } from 'react';
 import type { PeriodCompare } from '@/types';
 import { cn } from '@/utils/helpers';
 import { formatPercent, formatFullNumber, formatTrend } from '@/utils/format';
-import { GitCompare, TrendingUp, TrendingDown, Minus, ArrowRightLeft } from 'lucide-react';
+import { getDateRange, dateRangeLabel } from '@/utils/date';
+import type { DateRangePreset } from '@/types';
+import { GitCompare, TrendingUp, TrendingDown, Minus, ArrowRightLeft, CalendarDays } from 'lucide-react';
 import FunnelChart from './FunnelChart';
 import { Tag } from '@/components/ui/Tag';
+import { Button } from '@/components/ui/Button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Tabs } from '@/components/ui/Tabs';
 
@@ -12,14 +15,63 @@ interface PeriodCompareViewProps {
   data: PeriodCompare | null;
   compareMode: 'none' | 'overlay' | 'sidebyside';
   onModeChange: (mode: 'none' | 'overlay' | 'sidebyside') => void;
+  customComparePeriod: { start: string; end: string; label: string } | null;
+  onCustomComparePeriodChange: (period: { start: string; end: string; label: string } | null) => void;
 }
+
+const QUICK_PERIODS: { id: DateRangePreset; label: string }[] = [
+  { id: 'last7days', label: '最近7天' },
+  { id: 'last30days', label: '最近30天' },
+  { id: 'thisWeek', label: '本周' },
+  { id: 'lastWeek', label: '上周' },
+  { id: 'thisMonth', label: '本月' },
+  { id: 'lastMonth', label: '上月' },
+];
 
 const PeriodCompareView: React.FC<PeriodCompareViewProps> = ({
   data,
   compareMode,
   onModeChange,
+  customComparePeriod,
+  onCustomComparePeriodChange,
 }) => {
   const [hoveredStep, setHoveredStep] = useState<number | null>(null);
+  const [periodAInput, setPeriodAInput] = useState<{ start: string; end: string }>({ start: '', end: '' });
+  const [periodBInput, setPeriodBInput] = useState<{ start: string; end: string }>({ start: '', end: '' });
+
+  const applyCustomPeriods = () => {
+    if (periodAInput.start && periodAInput.end && periodBInput.start && periodBInput.end) {
+      const periodA = {
+        start: new Date(periodAInput.start).toISOString(),
+        end: new Date(periodAInput.end + 'T23:59:59').toISOString(),
+        label: '周期A: ' + periodAInput.start + ' ~ ' + periodAInput.end,
+      };
+      const periodB = {
+        start: new Date(periodBInput.start).toISOString(),
+        end: new Date(periodBInput.end + 'T23:59:59').toISOString(),
+        label: '周期B: ' + periodBInput.start + ' ~ ' + periodBInput.end,
+      };
+      onCustomComparePeriodChange(periodA);
+      if (compareMode === 'none') {
+        onModeChange('overlay');
+      }
+    }
+  };
+
+  const applyQuickPeriod = (presetId: DateRangePreset, slot: 'A' | 'B') => {
+    const range = getDateRange(presetId);
+    if (slot === 'A') {
+      setPeriodAInput({
+        start: new Date(range.start).toISOString().substring(0, 10),
+        end: new Date(range.end).toISOString().substring(0, 10),
+      });
+    } else {
+      setPeriodBInput({
+        start: new Date(range.start).toISOString().substring(0, 10),
+        end: new Date(range.end).toISOString().substring(0, 10),
+      });
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -41,26 +93,129 @@ const PeriodCompareView: React.FC<PeriodCompareViewProps> = ({
           />
         </CardHeader>
 
-        {compareMode !== 'none' && data && (
-          <div className="grid grid-cols-2 gap-3 mt-2">
-            <div className="p-4 rounded-xl bg-gradient-to-br from-navy-50 to-white border border-navy-100">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-navy-500">周期 A（基准）</p>
-              <p className="font-display font-semibold text-navy-900 mt-0.5 text-sm">
-                {data.periodA.label}
+        {compareMode !== 'none' && (
+          <div className="mt-3 space-y-4">
+            <div className="p-4 rounded-xl bg-navy-50/60 border border-navy-100">
+              <p className="text-xs font-semibold text-navy-700 mb-3 flex items-center gap-1.5">
+                <CalendarDays size={14} />
+                自定义选择两个对比周期
               </p>
-              <p className="text-[10px] text-navy-400 tabular mt-0.5">
-                {new Date(data.periodA.start).toLocaleDateString()} ~ {new Date(data.periodA.end).toLocaleDateString()}
-              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-navy-500 mb-2">
+                    周期 A（基准）
+                  </p>
+                  <div className="flex gap-2 mb-2">
+                    <input
+                      type="date"
+                      value={periodAInput.start}
+                      onChange={(e) => setPeriodAInput({ ...periodAInput, start: e.target.value })}
+                      className="flex-1 h-9 px-2.5 text-sm border border-navy-200 bg-white rounded-xl focus:outline-none focus:ring-2 focus:ring-navy-200"
+                    />
+                    <span className="flex items-center text-navy-400 text-sm">~</span>
+                    <input
+                      type="date"
+                      value={periodAInput.end}
+                      onChange={(e) => setPeriodAInput({ ...periodAInput, end: e.target.value })}
+                      className="flex-1 h-9 px-2.5 text-sm border border-navy-200 bg-white rounded-xl focus:outline-none focus:ring-2 focus:ring-navy-200"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {QUICK_PERIODS.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => applyQuickPeriod(p.id, 'A')}
+                        className="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-white border border-navy-200 text-navy-600 hover:bg-navy-100 hover:border-navy-300 transition-colors"
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-orange-600 mb-2">
+                    周期 B（对比）
+                  </p>
+                  <div className="flex gap-2 mb-2">
+                    <input
+                      type="date"
+                      value={periodBInput.start}
+                      onChange={(e) => setPeriodBInput({ ...periodBInput, start: e.target.value })}
+                      className="flex-1 h-9 px-2.5 text-sm border border-orange-200 bg-white rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-200"
+                    />
+                    <span className="flex items-center text-orange-400 text-sm">~</span>
+                    <input
+                      type="date"
+                      value={periodBInput.end}
+                      onChange={(e) => setPeriodBInput({ ...periodBInput, end: e.target.value })}
+                      className="flex-1 h-9 px-2.5 text-sm border border-orange-200 bg-white rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-200"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {QUICK_PERIODS.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => applyQuickPeriod(p.id, 'B')}
+                        className="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-white border border-orange-200 text-orange-600 hover:bg-orange-50 hover:border-orange-300 transition-colors"
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3 flex items-center gap-3">
+                <Button
+                  size="sm"
+                  onClick={applyCustomPeriods}
+                  disabled={!periodAInput.start || !periodAInput.end || !periodBInput.start || !periodBInput.end}
+                >
+                  应用对比
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    onCustomComparePeriodChange(null);
+                    setPeriodAInput({ start: '', end: '' });
+                    setPeriodBInput({ start: '', end: '' });
+                  }}
+                >
+                  重置为自动周期
+                </Button>
+                {customComparePeriod && (
+                  <Tag variant="success" size="sm" rounded="full">
+                    已启用自定义周期
+                  </Tag>
+                )}
+              </div>
             </div>
-            <div className="p-4 rounded-xl bg-gradient-to-br from-orange-50 to-white border border-orange-100">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-orange-600">周期 B（当前）</p>
-              <p className="font-display font-semibold text-orange-700 mt-0.5 text-sm">
-                {data.periodB.label}
-              </p>
-              <p className="text-[10px] text-orange-500 tabular mt-0.5">
-                {new Date(data.periodB.start).toLocaleDateString()} ~ {new Date(data.periodB.end).toLocaleDateString()}
-              </p>
-            </div>
+
+            {data && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-4 rounded-xl bg-gradient-to-br from-navy-50 to-white border border-navy-100">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-navy-500">周期 A（基准）</p>
+                  <p className="font-display font-semibold text-navy-900 mt-0.5 text-sm">
+                    {data.periodA.label}
+                  </p>
+                  <p className="text-[10px] text-navy-400 tabular mt-0.5">
+                    {new Date(data.periodA.start).toLocaleDateString()} ~ {new Date(data.periodA.end).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="p-4 rounded-xl bg-gradient-to-br from-orange-50 to-white border border-orange-100">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-orange-600">周期 B（当前）</p>
+                  <p className="font-display font-semibold text-orange-700 mt-0.5 text-sm">
+                    {data.periodB.label}
+                  </p>
+                  <p className="text-[10px] text-orange-500 tabular mt-0.5">
+                    {new Date(data.periodB.start).toLocaleDateString()} ~ {new Date(data.periodB.end).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </Card>

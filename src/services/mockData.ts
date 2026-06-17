@@ -15,7 +15,7 @@ import type {
   PeriodCompare,
 } from '@/types';
 import { generateId, randomInt, randomBetween, pickRandom, pickMultipleRandom } from '@/utils/helpers';
-import { subDays, addMinutes, subMinutes, subYears, subHours } from 'date-fns';
+import { subDays, addMinutes, subMinutes, subYears, subHours, differenceInDays } from 'date-fns';
 
 export const EVENT_CATALOG: EventCatalogItem[] = [
   { eventName: 'page_view_home', eventLabel: '浏览首页', category: '页面访问', description: '用户访问首页' },
@@ -73,11 +73,18 @@ export const USER_LEVELS = [
   { value: 'platinum', label: '铂金会员' },
 ];
 
+export const REGISTER_DATE_GROUPS = [
+  { value: '7d', label: '近7天注册' },
+  { value: '30d', label: '近30天注册' },
+  { value: 'earlier', label: '更早注册' },
+];
+
 export const DIMENSION_OPTIONS: UserDimensionOption[] = [
   { field: 'channel', label: '来源渠道', values: CHANNELS },
   { field: 'city', label: '所在城市', values: CITIES },
   { field: 'device', label: '设备类型', values: DEVICES },
   { field: 'userLevel', label: '用户等级', values: USER_LEVELS },
+  { field: 'registerDate', label: '注册时间', values: REGISTER_DATE_GROUPS },
 ];
 
 const DEFAULT_STEP_EVENTS: { name: string; eventName: string }[] = [
@@ -252,36 +259,50 @@ export const calculateFunnelResult = (
   const stepCount = funnel.steps.length;
   const steps: FunnelStepResult[] = [];
 
-  const seed = period.start.length + funnel.id.length;
-  const rand = (min: number, max: number) => {
-    const x = Math.sin(seed + min * 0.7 + max * 1.3) * 10000;
-    const r = x - Math.floor(x);
-    return Math.floor(r * (max - min + 1)) + min;
-  };
+  const dayDiff = differenceInDays(new Date(period.end), new Date(period.start));
+  const absDays = Math.max(dayDiff, 1);
 
-  let prevCount = 10000 + rand(5000, 30000);
-  let firstCount = prevCount;
+  let baseUserCount: number;
+  let minConvRate: number;
+  let maxConvRate: number;
+
+  if (absDays <= 1) {
+    baseUserCount = 5000 + randomInt(0, 2000);
+    minConvRate = 0.50;
+    maxConvRate = 0.70;
+  } else if (absDays <= 7) {
+    baseUserCount = 25000 + randomInt(0, 5000);
+    minConvRate = 0.45;
+    maxConvRate = 0.65;
+  } else if (absDays <= 30) {
+    baseUserCount = 80000 + randomInt(0, 10000);
+    minConvRate = 0.40;
+    maxConvRate = 0.55;
+  } else {
+    baseUserCount = absDays * 2800 + randomInt(0, 10000);
+    minConvRate = 0.35;
+    maxConvRate = 0.50;
+  }
+
+  let prevCount = baseUserCount;
+  let firstCount = baseUserCount;
 
   for (let i = 0; i < stepCount; i++) {
     const step = funnel.steps[i];
 
     if (i === 0) {
-      const c = 15000 + rand(8000, 40000);
-      prevCount = c;
-      firstCount = c;
       steps.push({
         stepId: step.id,
         stepName: step.name,
-        userCount: c,
+        userCount: baseUserCount,
         conversionRate: 1,
         overallConversionRate: 1,
         dropOffCount: 0,
         dropOffRate: 0,
       });
     } else {
-      const baseRate = 0.45 + (rand(5, 45) / 100);
-      const decay = 1 - (i * 0.03);
-      const conversionRate = Math.max(0.15, baseRate * decay);
+      const decay = 1 - (i * 0.04);
+      const conversionRate = Math.max(0.12, randomBetween(minConvRate, maxConvRate) * decay);
       const currentCount = Math.floor(prevCount * conversionRate);
       const dropOffCount = prevCount - currentCount;
 
@@ -557,6 +578,7 @@ export const INITIAL_ALERT_HISTORY: AlertHistoryItem[] = [
     message: '支付成功率较前日下降14.3%，低于阈值10%，请立即排查原因',
     isRead: false,
     severity: 'critical',
+    notifiedEmails: ['zhangops@example.com', 'liproduct@example.com'],
   },
   {
     id: 'h-002',
@@ -572,6 +594,7 @@ export const INITIAL_ALERT_HISTORY: AlertHistoryItem[] = [
     message: '支付环节转化率为62.3%，低于阈值65%，建议关注',
     isRead: true,
     severity: 'warning',
+    notifiedEmails: ['wanggrowth@example.com'],
   },
   {
     id: 'h-003',
@@ -587,6 +610,7 @@ export const INITIAL_ALERT_HISTORY: AlertHistoryItem[] = [
     message: '支付成功率较前日下降10.2%，触发阈值',
     isRead: true,
     severity: 'warning',
+    notifiedEmails: ['zhangops@example.com'],
   },
 ];
 
@@ -598,5 +622,64 @@ export const DASHBOARD_DATA: DashboardOverview = {
   avgConversionRate: 0.213,
   avgConversionRateTrend: 3.9,
   activeAlerts: 3,
+};
+
+export const simulateAlertCheck = (
+  rule: AlertRule,
+  currentConversionRate: number,
+  previousConversionRate: number,
+): AlertHistoryItem | null => {
+  const now = new Date();
+
+  if (rule.lastTriggeredAt) {
+    const lastTrigger = new Date(rule.lastTriggeredAt);
+    const coolDownMs = rule.coolDownMinutes * 60 * 1000;
+    if (now.getTime() - lastTrigger.getTime() < coolDownMs) {
+      return null;
+    }
+  }
+
+  let isBreached = false;
+  let message = '';
+
+  if (rule.thresholdType === 'relative') {
+    const changePercent = previousConversionRate > 0
+      ? ((currentConversionRate - previousConversionRate) / previousConversionRate) * 100
+      : 0;
+    if (rule.threshold < 0 && changePercent <= rule.threshold) {
+      isBreached = true;
+      message = `${rule.stepName}转化率较上周期下降${Math.abs(changePercent).toFixed(1)}%，低于阈值${rule.threshold}%`;
+    } else if (rule.threshold > 0 && changePercent >= rule.threshold) {
+      isBreached = true;
+      message = `${rule.stepName}转化率较上周期上升${changePercent.toFixed(1)}%，超过阈值${rule.threshold}%`;
+    }
+  } else {
+    if (currentConversionRate < rule.threshold) {
+      isBreached = true;
+      message = `${rule.stepName}转化率为${(currentConversionRate * 100).toFixed(1)}%，低于绝对阈值${(rule.threshold * 100).toFixed(1)}%`;
+    }
+  }
+
+  if (!isBreached) return null;
+
+  return {
+    id: generateId(),
+    ruleId: rule.id,
+    ruleName: rule.name,
+    funnelName: rule.funnelName,
+    stepName: rule.stepName,
+    triggeredAt: now.toISOString(),
+    actualValue: currentConversionRate,
+    previousValue: previousConversionRate,
+    threshold: rule.threshold,
+    thresholdType: rule.thresholdType,
+    message,
+    isRead: false,
+    severity: rule.thresholdType === 'absolute' && currentConversionRate < rule.threshold * 0.8
+      ? 'critical' as const
+      : rule.thresholdType === 'relative' && Math.abs(((currentConversionRate - previousConversionRate) / (previousConversionRate || 1)) * 100) > Math.abs(rule.threshold) * 2
+        ? 'critical' as const
+        : 'warning' as const,
+  };
 };
 

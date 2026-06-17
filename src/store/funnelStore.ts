@@ -16,6 +16,7 @@ import {
 } from '@/services/mockData';
 import { getDateRange, getCompareRange } from '@/utils/date';
 import { generateId } from '@/utils/helpers';
+import { loadState, saveState } from '@/services/localStorage';
 
 interface FunnelStore {
   funnels: Funnel[];
@@ -25,12 +26,14 @@ interface FunnelStore {
   selectedDimension: UserDimensionField | null;
   compareMode: 'none' | 'overlay' | 'sidebyside';
   compareDateRange: { start: string; end: string; label: string } | null;
+  customComparePeriod: { start: string; end: string; label: string } | null;
 
   setSelectedFunnel: (id: string) => void;
   setDatePreset: (preset: DateRangePreset) => void;
   setCustomDateRange: (range: { start: string; end: string } | null) => void;
   setSelectedDimension: (dim: UserDimensionField | null) => void;
   setCompareMode: (mode: 'none' | 'overlay' | 'sidebyside') => void;
+  setCustomComparePeriod: (period: { start: string; end: string; label: string } | null) => void;
   toggleFavorite: (id: string) => void;
   addFunnel: (data: Omit<Funnel, 'id' | 'createdAt' | 'updatedAt' | 'createdBy' | 'isFavorite'>) => Funnel;
   updateFunnel: (id: string, data: Partial<Funnel>) => void;
@@ -44,13 +47,14 @@ interface FunnelStore {
 }
 
 export const useFunnelStore = create<FunnelStore>((set, get) => ({
-  funnels: INITIAL_FUNNELS,
+  funnels: loadState<Funnel[]>('funnels', INITIAL_FUNNELS),
   selectedFunnelId: null,
   datePreset: 'last7days',
   customDateRange: null,
   selectedDimension: null,
   compareMode: 'none',
   compareDateRange: null,
+  customComparePeriod: null,
 
   setSelectedFunnel: (id) => set({ selectedFunnelId: id }),
   setDatePreset: (preset) => {
@@ -70,13 +74,16 @@ export const useFunnelStore = create<FunnelStore>((set, get) => ({
   },
   setSelectedDimension: (dim) => set({ selectedDimension: dim }),
   setCompareMode: (mode) => {
-    const { getDateRange: gr } = get();
-    const current = gr();
     set({
       compareMode: mode,
-      compareDateRange: mode !== 'none' ? getCompareRange({ start: current.start, end: current.end }) : null,
+      compareDateRange: mode !== 'none' ? get().compareDateRange || (() => {
+        const range = get().getDateRange();
+        return getCompareRange({ start: range.start, end: range.end });
+      })() : null,
     });
   },
+
+  setCustomComparePeriod: (period) => set({ customComparePeriod: period }),
 
   toggleFavorite: (id) =>
     set({
@@ -139,16 +146,21 @@ export const useFunnelStore = create<FunnelStore>((set, get) => ({
   },
 
   getPeriodCompare: (funnelId) => {
-    const { compareMode, compareDateRange } = get();
-    if (compareMode === 'none' || !compareDateRange) return null;
+    const { compareMode, compareDateRange, customComparePeriod } = get();
+    if (compareMode === 'none') return null;
+    const comparePeriod = customComparePeriod || compareDateRange;
+    if (!comparePeriod) return null;
     const funnel = get().getFunnel(funnelId);
     const range = get().getDateRange();
     if (!funnel) return null;
-
     return calculatePeriodCompare(
       funnel,
-      { start: compareDateRange.start, end: compareDateRange.end, label: compareDateRange.label },
+      { start: comparePeriod.start, end: comparePeriod.end, label: comparePeriod.label },
       { start: range.start, end: range.end, label: range.label }
     );
   },
 }));
+
+useFunnelStore.subscribe((state) => {
+  saveState('funnels', state.funnels);
+});

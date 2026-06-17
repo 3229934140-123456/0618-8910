@@ -173,6 +173,7 @@ export interface AlertHistoryItem {
   message: string;
   isRead: boolean;
   severity: 'warning' | 'critical';
+  notifiedEmails?: string[];
 }
 
 export interface DashboardOverview {

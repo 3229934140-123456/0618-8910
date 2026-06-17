@@ -2,6 +2,12 @@ import React, { useMemo, useState } from 'react';
 import { useAlertStore, useFunnelStore } from '@/store';
 import type { AlertContact } from '@/types';
 import {
+  simulateAlertCheck,
+  calculateFunnelResult,
+  calculatePeriodCompare,
+} from '@/services/mockData';
+import { getDateRange, getCompareRange } from '@/utils/date';
+import {
   BellRing,
   Plus,
   TrendingDown,
@@ -118,6 +124,8 @@ const AlertCenterPage: React.FC = () => {
     const step = funnel?.steps[formData.stepIndex];
     if (!funnel || !step) return;
 
+    let savedRuleId: string;
+
     if (editingRule) {
       updateRule(editingRule.id, {
         ...formData,
@@ -125,14 +133,43 @@ const AlertCenterPage: React.FC = () => {
         stepId: step.id,
         stepName: step.name,
       });
+      savedRuleId = editingRule.id;
     } else {
-      addRule({
+      const newRule = addRule({
         ...formData,
         funnelName: funnel.name,
         stepId: step.id,
         stepName: step.name,
       });
+      savedRuleId = newRule.id;
     }
+
+    const savedRule = useAlertStore.getState().rules.find((r) => r.id === savedRuleId);
+    if (savedRule && savedRule.isEnabled && funnel) {
+      const currentRange = getDateRange('last7days');
+      const prevRange = getCompareRange({ start: currentRange.start, end: currentRange.end });
+      const currentResult = calculateFunnelResult(funnel, { start: currentRange.start, end: currentRange.end });
+      const prevResult = calculateFunnelResult(funnel, { start: prevRange.start, end: prevRange.end });
+
+      const stepIdx = funnel.steps.findIndex((s) => s.id === savedRule.stepId);
+      const currentRate = stepIdx >= 0 && stepIdx < currentResult.steps.length ? currentResult.steps[stepIdx].conversionRate : 0;
+      const previousRate = stepIdx >= 0 && stepIdx < prevResult.steps.length ? prevResult.steps[stepIdx].conversionRate : 0;
+
+      const alertItem = simulateAlertCheck(savedRule, currentRate, previousRate);
+      if (alertItem) {
+        const enrichedAlert = {
+          ...alertItem,
+          notifiedEmails: savedRule.contacts.map((c) => c.email).filter(Boolean),
+        };
+        useAlertStore.setState((state) => ({
+          history: [enrichedAlert, ...state.history],
+          rules: state.rules.map((r) =>
+            r.id === savedRule.id ? { ...r, lastTriggeredAt: alertItem.triggeredAt } : r
+          ),
+        }));
+      }
+    }
+
     setEditModal({ id: null, open: false });
   };
 
@@ -244,9 +281,50 @@ const AlertCenterPage: React.FC = () => {
                 </>
               )}
               {activeTab === 'rules' && (
-                <Button leftIcon={<Plus size={15} />} onClick={openCreateModal}>
-                  新建预警规则
-                </Button>
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    leftIcon={<Activity size={14} />}
+                    onClick={() => {
+                      const allRules = useAlertStore.getState().rules.filter((r) => r.isEnabled);
+                      let newCount = 0;
+                      for (const rule of allRules) {
+                        const funnel = useFunnelStore.getState().getFunnel(rule.funnelId);
+                        if (!funnel) continue;
+                        const currentRange = getDateRange('last7days');
+                        const prevRange = getCompareRange({ start: currentRange.start, end: currentRange.end });
+                        const currentResult = calculateFunnelResult(funnel, { start: currentRange.start, end: currentRange.end });
+                        const prevResult = calculateFunnelResult(funnel, { start: prevRange.start, end: prevRange.end });
+                        const stepIdx = funnel.steps.findIndex((s) => s.id === rule.stepId);
+                        const currentRate = stepIdx >= 0 && stepIdx < currentResult.steps.length ? currentResult.steps[stepIdx].conversionRate : 0;
+                        const previousRate = stepIdx >= 0 && stepIdx < prevResult.steps.length ? prevResult.steps[stepIdx].conversionRate : 0;
+                        const alertItem = simulateAlertCheck(rule, currentRate, previousRate);
+                        if (alertItem) {
+                          const enrichedAlert = {
+                            ...alertItem,
+                            notifiedEmails: rule.contacts.map((c) => c.email).filter(Boolean),
+                          };
+                          useAlertStore.setState((state) => ({
+                            history: [enrichedAlert, ...state.history],
+                            rules: state.rules.map((r) =>
+                              r.id === rule.id ? { ...r, lastTriggeredAt: alertItem.triggeredAt } : r
+                            ),
+                          }));
+                          newCount++;
+                        }
+                      }
+                      if (newCount > 0) {
+                        setActiveTab('history');
+                      }
+                    }}
+                  >
+                    立即检查
+                  </Button>
+                  <Button leftIcon={<Plus size={15} />} onClick={openCreateModal}>
+                    新建预警规则
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -468,6 +546,9 @@ const AlertCenterPage: React.FC = () => {
                         触发时间
                       </th>
                       <th className="text-left py-3.5 px-5 text-[11px] font-semibold uppercase tracking-wider text-navy-500">
+                        通知邮箱
+                      </th>
+                      <th className="text-left py-3.5 px-5 text-[11px] font-semibold uppercase tracking-wider text-navy-500">
                         状态
                       </th>
                       <th></th>
@@ -532,6 +613,23 @@ const AlertCenterPage: React.FC = () => {
                           <div className="text-navy-400 mt-0.5">
                             {formatTimeOnly(h.triggeredAt)}
                           </div>
+                        </td>
+                        <td className="py-4 px-5">
+                          {h.notifiedEmails && h.notifiedEmails.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {h.notifiedEmails.map((email, ei) => (
+                                <span
+                                  key={ei}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] bg-navy-50 border border-navy-100 rounded-full text-navy-600"
+                                >
+                                  <Mail size={9} />
+                                  {email}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-navy-400">-</span>
+                          )}
                         </td>
                         <td className="py-4 px-5">
                           {h.isRead ? (

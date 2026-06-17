@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Report } from '@/types';
 import { INITIAL_REPORTS } from '@/services/mockData';
 import { generateId } from '@/utils/helpers';
+import { loadState, saveState } from '@/services/localStorage';
 
 interface ReportStore {
   reports: Report[];
@@ -13,7 +14,7 @@ interface ReportStore {
 }
 
 export const useReportStore = create<ReportStore>((set, get) => ({
-  reports: INITIAL_REPORTS,
+  reports: loadState<Report[]>('reports', INITIAL_REPORTS),
 
   addReport: (data) => {
     const now = new Date().toISOString();
@@ -55,3 +56,7 @@ export const useReportStore = create<ReportStore>((set, get) => ({
 
   getReport: (id) => get().reports.find((r) => r.id === id),
 }));
+
+useReportStore.subscribe((state) => {
+  saveState('reports', state.reports);
+});

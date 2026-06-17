@@ -1,6 +1,6 @@
 import React from 'react';
 import type { DimensionSplit, UserDimensionField } from '@/types';
-import { DIMENSION_OPTIONS, CHANNELS, CITIES, DEVICES, USER_LEVELS } from '@/services/mockData';
+import { DIMENSION_OPTIONS, CHANNELS, CITIES, DEVICES, USER_LEVELS, REGISTER_DATE_GROUPS } from '@/services/mockData';
 import { cn } from '@/utils/helpers';
 import { formatPercent, formatFullNumber } from '@/utils/format';
 import { Layers, Users } from 'lucide-react';
@@ -24,7 +24,7 @@ const DimensionSplitter: React.FC<DimensionSplitterProps> = ({
     city: CITIES,
     device: DEVICES,
     userLevel: USER_LEVELS,
-    registerDate: [{ value: '30d', label: '30天内' }],
+    registerDate: REGISTER_DATE_GROUPS,
   };
 
   return (
