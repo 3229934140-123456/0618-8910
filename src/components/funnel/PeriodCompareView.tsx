@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { PeriodCompare } from '@/types';
 import { cn } from '@/utils/helpers';
 import { formatPercent, formatFullNumber, formatTrend } from '@/utils/format';
-import { getDateRange, dateRangeLabel } from '@/utils/date';
+import { getDateRange } from '@/utils/date';
 import type { DateRangePreset } from '@/types';
 import { GitCompare, TrendingUp, TrendingDown, Minus, ArrowRightLeft, CalendarDays } from 'lucide-react';
 import FunnelChart from './FunnelChart';
@@ -15,8 +15,13 @@ interface PeriodCompareViewProps {
   data: PeriodCompare | null;
   compareMode: 'none' | 'overlay' | 'sidebyside';
   onModeChange: (mode: 'none' | 'overlay' | 'sidebyside') => void;
-  customComparePeriod: { start: string; end: string; label: string } | null;
-  onCustomComparePeriodChange: (period: { start: string; end: string; label: string } | null) => void;
+  customCompareA: { start: string; end: string; label: string } | null;
+  customCompareB: { start: string; end: string; label: string } | null;
+  onApplyBoth: (
+    periodA: { start: string; end: string; label: string },
+    periodB: { start: string; end: string; label: string }
+  ) => void;
+  onClearCustom: () => void;
 }
 
 const QUICK_PERIODS: { id: DateRangePreset; label: string }[] = [
@@ -32,12 +37,32 @@ const PeriodCompareView: React.FC<PeriodCompareViewProps> = ({
   data,
   compareMode,
   onModeChange,
-  customComparePeriod,
-  onCustomComparePeriodChange,
+  customCompareA,
+  customCompareB,
+  onApplyBoth,
+  onClearCustom,
 }) => {
   const [hoveredStep, setHoveredStep] = useState<number | null>(null);
   const [periodAInput, setPeriodAInput] = useState<{ start: string; end: string }>({ start: '', end: '' });
   const [periodBInput, setPeriodBInput] = useState<{ start: string; end: string }>({ start: '', end: '' });
+
+  useEffect(() => {
+    if (customCompareA) {
+      setPeriodAInput({
+        start: new Date(customCompareA.start).toISOString().substring(0, 10),
+        end: new Date(customCompareA.end).toISOString().substring(0, 10),
+      });
+    }
+  }, [customCompareA]);
+
+  useEffect(() => {
+    if (customCompareB) {
+      setPeriodBInput({
+        start: new Date(customCompareB.start).toISOString().substring(0, 10),
+        end: new Date(customCompareB.end).toISOString().substring(0, 10),
+      });
+    }
+  }, [customCompareB]);
 
   const applyCustomPeriods = () => {
     if (periodAInput.start && periodAInput.end && periodBInput.start && periodBInput.end) {
@@ -51,7 +76,7 @@ const PeriodCompareView: React.FC<PeriodCompareViewProps> = ({
         end: new Date(periodBInput.end + 'T23:59:59').toISOString(),
         label: '周期B: ' + periodBInput.start + ' ~ ' + periodBInput.end,
       };
-      onCustomComparePeriodChange(periodA);
+      onApplyBoth(periodA, periodB);
       if (compareMode === 'none') {
         onModeChange('overlay');
       }
@@ -60,18 +85,16 @@ const PeriodCompareView: React.FC<PeriodCompareViewProps> = ({
 
   const applyQuickPeriod = (presetId: DateRangePreset, slot: 'A' | 'B') => {
     const range = getDateRange(presetId);
+    const startStr = new Date(range.start).toISOString().substring(0, 10);
+    const endStr = new Date(range.end).toISOString().substring(0, 10);
     if (slot === 'A') {
-      setPeriodAInput({
-        start: new Date(range.start).toISOString().substring(0, 10),
-        end: new Date(range.end).toISOString().substring(0, 10),
-      });
+      setPeriodAInput({ start: startStr, end: endStr });
     } else {
-      setPeriodBInput({
-        start: new Date(range.start).toISOString().substring(0, 10),
-        end: new Date(range.end).toISOString().substring(0, 10),
-      });
+      setPeriodBInput({ start: startStr, end: endStr });
     }
   };
+
+  const hasCustom = customCompareA && customCompareB;
 
   return (
     <div className="space-y-4">
@@ -179,16 +202,16 @@ const PeriodCompareView: React.FC<PeriodCompareViewProps> = ({
                   size="sm"
                   variant="ghost"
                   onClick={() => {
-                    onCustomComparePeriodChange(null);
+                    onClearCustom();
                     setPeriodAInput({ start: '', end: '' });
                     setPeriodBInput({ start: '', end: '' });
                   }}
                 >
                   重置为自动周期
                 </Button>
-                {customComparePeriod && (
+                {hasCustom && (
                   <Tag variant="success" size="sm" rounded="full">
-                    已启用自定义周期
+                    已启用自定义双周期
                   </Tag>
                 )}
               </div>
@@ -234,7 +257,6 @@ const PeriodCompareView: React.FC<PeriodCompareViewProps> = ({
 
                 const isImproved = diff.rateDiffPercent > 0;
                 const isWorse = diff.rateDiffPercent < 0;
-                const isNeutral = Math.abs(diff.rateDiffPercent) < 0.5;
                 const significant = Math.abs(diff.rateDiffPercent) >= 3;
 
                 return (
